@@ -4,11 +4,7 @@
     <meta charset="utf-8"/>
     <title>Live DOM URL Viewer</title>
     <link rel="stylesheet" type="text/css" href="style.css"/>
-    <script src="punycode.js" lang="text/javascript"></script>
-    <script src="unorm.js" lang="text/javascript"></script>
-    <script src="idna.js" lang="text/javascript"></script>
     <script src="url.js" lang="text/javascript"></script>
-    <script src="urlparser.js" lang="text/javascript"></script>
     <base id="docbase" href="about:"/>
   </head>
 
@@ -205,7 +201,7 @@
           }
         } catch (e) {
           domException.parentNode.style.display = "block";
-          domException.textContent = e.toString();
+          domException.textContent = e;
         }
 
         domHref.textContent = target.href;
@@ -220,9 +216,15 @@
       }
 
       function parseUrl(input) {
-        if (typeof input != 'undefined') {
-          url = new Url(input, document.baseURI);
-          value.value = url[property.value];
+        try {
+          if (typeof input != 'undefined') {
+            url = new Url(input, document.baseURI);
+            value.value = url[property.value];
+            urlException.parentNode.style.display = "none";
+          }
+        } catch(e) {
+          urlException.parentNode.style.display = "block";
+          urlException.textContent = e;
         }
 
         urlHref.textContent = url.href;
@@ -234,22 +236,15 @@
         urlPathname.textContent = url.pathname;
         urlSearch.textContent = url.search;
         urlHash.textContent = url.hash;
-
-        if (url.exception) {
-          urlException.parentNode.style.display = "block";
-          urlException.textContent = url.exception;
-        } else {
-          urlException.parentNode.style.display = "none";
-        }
       }
 
       function compare(x, y) {
         if (x.textContent != y.textContent) {
-          x.className = "fail"; 
-          y.className = "fail"; 
+          x.className = "fail";
+          y.className = "fail";
         } else {
-          x.className = "pass"; 
-          y.className = "pass"; 
+          x.className = "pass";
+          y.className = "pass";
         }
 
         if (x.textContent != '' || y.textContent != '') {

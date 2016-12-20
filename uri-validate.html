@@ -5,9 +5,6 @@
     <title>URI/URL validator</title>
     <script src="uri-validate.js" lang="text/javascript"></script>
     <script src="url.js" lang="text/javascript"></script>
-    <script src="urlparser.js" lang="text/javascript"></script>
-    <script src="punycode.js" lang="text/javascript"></script>
-    <script src="idna.js" lang="text/javascript"></script>
   </head>
 
   <body>
@@ -15,12 +12,12 @@
     <input/>
 
     <p class="uri">
-      Valid URI reference: 
+      Valid URI reference:
       <span class="status"></span>
     </p>
 
     <p class="url">
-      Valid URL: 
+      Valid URL:
       <span class="status"></span>
     </p>
 
@@ -29,36 +26,35 @@
       var url_p = document.querySelector("p.url");
       var uri_status = uri_p.querySelector(".status");
       var url_status = url_p.querySelector(".status");
-      
+
       function evaluate(input) {
         if (!input) {
           uri_p.style.display = "none";
           url_p.style.display = "none";
           return
         };
-      
+
         if (uri_validate(input)) {
           uri_status.textContent = "yes"
         } else {
           uri_status.textContent = "no"
         };
-      
-        var url = new Url(input, "http://example.com/");
-      
-        if (url.exception) {
-          url_status.textContent = "no - " + url.exception
-        } else {
-          url_status.textContent = "yes"
-        };
-      
+
+        try {
+          var url = new Url(input, "http://example.com/");
+          url_status.textContent = "maybe"
+        } catch(e) {
+          url_status.textContent = "no - " + e
+        }
+
         uri_p.style.display = "block";
         url_p.style.display = "block"
       };
-      
+
       document.querySelector("input").addEventListener("input", function(event) {
         evaluate(event.target.value)
       });
-      
+
       evaluate(document.querySelector("input").value)
     </script>
   </body>
