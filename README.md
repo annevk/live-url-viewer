@@ -1,4 +1,4 @@
-== Setup ==
+## Setup
 
 To generate a new version of `url.js`:
 
@@ -14,7 +14,7 @@ Patches welcome!
 Fixing https://github.com/jsdom/whatwg-url/issues/61 can help make uri-validate.html functional
 again and provide more detailed feedback in liveview too.
 
-== Acknowledgments ==
+## Acknowledgments
 
 * Sam Ruby
 * Sebastian Mayr
