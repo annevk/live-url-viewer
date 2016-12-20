@@ -1,24 +1,29 @@
 ﻿<!doctype html>
 <meta charset=utf-8>
-<title>Live DOM URL Viewer</title>
+<title>Live URL Viewer</title>
 <link rel=stylesheet href=style.css>
 <script src=url.js></script>
 <base id=docbase href=about:>
+<h1>Live URL Viewer</h1>
 
-<h2>Enter a URL to parse:</h2>
+<p>The output below will display a URL's parsed components from the browser and from
+<a href=https://github.com/jsdom/whatwg-url>jsdom/whatwg-url</a> for the
+<a href=http://url.spec.whatwg.org/>URL Standard</a>. The output will be colored
+<span class="pass">dark green</span> unless a difference occurs between the two parsers in which
+case the affected URL component will be colored <span class="fail">red</span>.
 
-<p>The output below will display a URL's parsed components from both the browser's DOM, and from the <a href="https://github.com/rubys/url/tree/peg.js/reference-implementation">reference implementation</a> for the <a href="http://url.spec.whatwg.org/">WHATWG Living Standard.</a> The output will be colored <span class="pass">dark green</span> unless a difference occurs between the two parsers in which case the affected URL component will be colored <span class="fail">red</span>.</p>
-<input class="input" id="url" placeholder="http://example.com">
+<p><label for=url>URL:</label></p>
+<input class="input" id="url" placeholder="https://example.com">
 <a id="target"></a>
 
 <div>
-  <p>Specify a base URL</p>
+  <p><label for=base>Base URL:</label></p>
   <input class="input" id="base" value="about:">
 </div>
 
 <div>
-  <span>Set</span>
-  <select name='property'>
+  <label for=idl-attribute>Set</label>
+  <select id=idl-attribute>
     <option>href</option>
     <option>protocol</option>
     <option>username</option>
@@ -30,11 +35,11 @@
     <option>search</option>
     <option>hash</option>
   </select>
-  <span>=</span>
+  <label for=value>=</label>
   <input class="input" id="value">
 </div>
 
-<h2>URL components from DOM properties:</h2>
+<h2>Browser's URL components</h2>
 
 <div class="output">
   <div>
@@ -79,7 +84,7 @@
   </div>
 </div>
 
-<h2>URL components from the URL Reference Implementation:</h2>
+<h2>jsdom/whatwg-url's URL components</h2>
 
 <div class="output">
   <div>
@@ -263,7 +268,7 @@
   var base = document.getElementById("base");
   base.oninput = function() {rebase(this.value)};
 
-  var property = document.querySelector('select[name=property]');
+  var property = document.getElementById("idl-attribute");
   property.onchange = function() {value.value = url[property.value]};
   value.oninput = function() {
     try {
