@@ -1,61 +1,55 @@
-﻿<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-  <head>
-    <meta charset="utf-8"/>
-    <title>URI/URL validator</title>
-    <script src="uri-validate.js" lang="text/javascript"></script>
-    <script src="url.js" lang="text/javascript"></script>
-  </head>
+﻿<!doctype html>
+<meta charset=utf-8>
+<title>URI/URL validator</title>
+<script src=uri-validate.js></script>
+<script src=url.js></script>
 
-  <body>
-    <h1>URI/URL validator</h1>
-    <input/>
+<h1>URI/URL validator</h1>
+<input>
 
-    <p class="uri">
-      Valid URI reference:
-      <span class="status"></span>
-    </p>
+<p class="uri">
+  Valid URI reference:
+  <span class="status"></span>
+</p>
 
-    <p class="url">
-      Valid URL:
-      <span class="status"></span>
-    </p>
+<p class="url">
+  Valid URL:
+  <span class="status"></span>
+</p>
 
-    <script lang="text/javascript">
-      var uri_p = document.querySelector("p.uri");
-      var url_p = document.querySelector("p.url");
-      var uri_status = uri_p.querySelector(".status");
-      var url_status = url_p.querySelector(".status");
+<script>
+  var uri_p = document.querySelector("p.uri");
+  var url_p = document.querySelector("p.url");
+  var uri_status = uri_p.querySelector(".status");
+  var url_status = url_p.querySelector(".status");
 
-      function evaluate(input) {
-        if (!input) {
-          uri_p.style.display = "none";
-          url_p.style.display = "none";
-          return
-        };
+  function evaluate(input) {
+    if (!input) {
+      uri_p.style.display = "none";
+      url_p.style.display = "none";
+      return
+    };
 
-        if (uri_validate(input)) {
-          uri_status.textContent = "yes"
-        } else {
-          uri_status.textContent = "no"
-        };
+    if (uri_validate(input)) {
+      uri_status.textContent = "yes"
+    } else {
+      uri_status.textContent = "no"
+    };
 
-        try {
-          var url = new Url(input, "http://example.com/");
-          url_status.textContent = "maybe"
-        } catch(e) {
-          url_status.textContent = "no - " + e
-        }
+    try {
+      var url = new Url(input, "http://example.com/");
+      url_status.textContent = "maybe"
+    } catch(e) {
+      url_status.textContent = "no - " + e
+    }
 
-        uri_p.style.display = "block";
-        url_p.style.display = "block"
-      };
+    uri_p.style.display = "block";
+    url_p.style.display = "block"
+  };
 
-      document.querySelector("input").addEventListener("input", function(event) {
-        evaluate(event.target.value)
-      });
+  document.querySelector("input").addEventListener("input", function(event) {
+    evaluate(event.target.value)
+  });
 
-      evaluate(document.querySelector("input").value)
-    </script>
-  </body>
-</html>
+  evaluate(document.querySelector("input").value)
+</script>
