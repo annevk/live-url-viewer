@@ -8,4 +8,4 @@ build:
 	make copy
 
 deploy:
-	scp *.css *.html *.js anne:quuz.org/url/
+	scp .htaccess *.css *.html *.js anne:quuz.org/url/

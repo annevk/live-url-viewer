@@ -1,0 +1,5 @@
+Options +Indexes
+IndexOptions +ScanHTMLTitles
+IndexIgnore style.css url.js uri-validate.js
+
+Redirect 301 /url/liveview1.html /url/liveview.html
