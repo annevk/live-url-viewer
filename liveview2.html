@@ -159,13 +159,8 @@ case the affected URL component will be colored <span class="fail">red</span>.
   var urlException = document.getElementById("urlException");
 
   function rebase(base) {
-    try {
-      document.baseURI = base;
-      document.getElementById("docbase").setAttribute('href', base);
-    } catch (e) {
-    }
-
-    parse(target.value);
+    document.getElementById("docbase").setAttribute('href', base);
+    parse(target.textContent);
   }
 
   function parse(input) {
