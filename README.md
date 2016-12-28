@@ -1,15 +1,7 @@
 ## Setup
 
-To generate a new version of `url.js`:
-
-```
-npm i whatwg-url; echo 'window.Url = require("whatwg-url").URL;' > temp.js; browserify temp.js -o url.js
-rm temp.js
-```
-
-Note: liveview.html, liveview2.html, and liveview3.html are identical. We should probably create
-some kind of build script to put the whole thing together rather than keep all resources in Git.
-Patches welcome!
+To generate a new version of `url.js` and copy `liveview2.html` and `liveview3.html` from
+`liveview.html`, run `make build`. To just update `liveview2.html` and `liveview3.html`, run `make`.
 
 Fixing https://github.com/jsdom/whatwg-url/issues/61 can help make uri-validate.html functional
 again and provide more detailed feedback in liveview too.

@@ -5,10 +5,7 @@
   font-family: Georgia;
 }
 
-li.result {
-  list-style-type: none;
-  font-size: 11px;
-}
+body { max-width:70em; }
 
 h1, h2, h3, h4, h5, h6 {
   font-style: italic;
@@ -28,56 +25,19 @@ p {
   display: block;
 }
 
-ul {
+footer {
+  position:absolute;
+  top:1em;
+  right:1em;
+}
+
+.input {
+  width: 90%;
   margin: 10px;
-  padding: 10px;
-}
-
-ol {
-  margin: 10px;
-  padding: 10px;
-}
-
-pre {
-  font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', 'Lucida Console', monospace, fixed;
-  margin-left: 1em;
-  border-width: 0 0 0 5px;
-  border-style: solid;
-  border-color: silver;
-  padding: 1em 0em 1em 1em;
-  margin-left: 1em;
-}
-
-iframe {
-  width:1px;
-  height: 1px;
-  background-color: silver;
-  visibility: hidden;
-}
-
-.bibliography {
-  font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', 'Lucida Console', monospace, fixed;
-  color: silver;
-  font-style: normal;
-}
-
-.input { 
-  width: 90%; 
-  margin: 10px; 
 }
 
 .result {
   font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', 'Lucida Console', monospace, fixed;
-}
-
-.progress {
-  font-size: 1.2em;
-  font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', 'Lucida Console', monospace, fixed;
-}
-
-.testcase {
-  font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', 'Lucida Console', monospace, fixed;
-  color: gray;
 }
 
 .pass {
@@ -86,34 +46,18 @@ iframe {
 }
 
 
-.title { 
-  width: 100px; 
+.title {
+  width: 100px;
   display: inline-block;
 }
 
-.title:after { 
-  content: ":"; 
+.title:after {
+  content: ":";
 }
 
 .fail {
   font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', 'Lucida Console', monospace, fixed;
   color: red;
-}
-
-.err {
-  font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', 'Lucida Console', monospace, fixed;
-  color: black;
-}
-
-.info {
-  font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', 'Lucida Console', monospace, fixed;
-  color: black;
-}
-
-.details {
-  font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', 'Lucida Console', monospace, fixed;
-  color: black;
-  display: none;
 }
 
 .output {
@@ -122,16 +66,6 @@ iframe {
   width: 95%;
   float: none;
   padding: 1em;
-}
-
-.container {
-  width: 1200px;
-  float: none;
-  margin: 0 auto;
-}
-
-#testid {
-  width: 20px;
 }
 
 #domException, #urlException {
