@@ -160,7 +160,7 @@ case the affected URL component will be colored <span class="fail">red</span>.
 
   function rebase(base) {
     document.getElementById("docbase").setAttribute('href', base);
-    parse(target.textContent);
+    parse(target.getAttribute("href"));
   }
 
   function parse(input) {
@@ -318,7 +318,7 @@ case the affected URL component will be colored <span class="fail">red</span>.
     }
   }
 
-  target.value = location.href;
+  target.setAttribute("href", location.href);
   rebase(base.value);
   input.oninput();
 </script>
