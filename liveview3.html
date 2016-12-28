@@ -190,7 +190,7 @@ case the affected URL component will be colored <span class="fail">red</span>.
 
     if (hash) {
       history.replaceState(history.state, '',
-        location.href.split('#')[0] + '#' + encodeURIComponent(hash));
+        location.href.split('#')[0] + '#' + hash);
     }
   }
 
@@ -262,6 +262,10 @@ case the affected URL component will be colored <span class="fail">red</span>.
     element2.style.color = color;
   }
 
+  function getFragment() {
+    return decodeURIComponent(location.hash.substring(1))
+  }
+
   var input = document.getElementById("url");
   input.oninput = function() {parse(this.value)};
 
@@ -290,9 +294,9 @@ case the affected URL component will be colored <span class="fail">red</span>.
   if (location.pathname.indexOf('2') == -1) {
     base.parentNode.style.display = 'none';
     base.value = location.href;
-    input.value = location.hash.substring(1);
+    input.value = getFragment();
   } else {
-    var fragment = location.hash.substring(1);
+    var fragment = getFragment();
     var space = fragment.indexOf(' ');
     if (space != -1) {
       base.value = fragment.substr(0, space);
