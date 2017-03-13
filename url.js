@@ -443,7 +443,7 @@ exports.implementation = class URLImpl {
   }
 
   set username(v) {
-    if (this._url.host === null || this._url.cannotBeABaseURL) {
+    if (usm.cannotHaveAUsernamePasswordPort(this._url)) {
       return;
     }
 
@@ -451,15 +451,11 @@ exports.implementation = class URLImpl {
   }
 
   get password() {
-    if (this._url.password === null) {
-      return "";
-    }
-
     return this._url.password;
   }
 
   set password(v) {
-    if (this._url.host === null || this._url.cannotBeABaseURL) {
+    if (usm.cannotHaveAUsernamePasswordPort(this._url)) {
       return;
     }
 
@@ -513,7 +509,7 @@ exports.implementation = class URLImpl {
   }
 
   set port(v) {
-    if (this._url.host === null || this._url.cannotBeABaseURL || this._url.scheme === "file") {
+    if (usm.cannotHaveAUsernamePasswordPort(this._url)) {
       return;
     }
 
@@ -527,6 +523,10 @@ exports.implementation = class URLImpl {
   get pathname() {
     if (this._url.cannotBeABaseURL) {
       return this._url.path[0];
+    }
+
+    if (this._url.path.length === 0) {
+      return "";
     }
 
     return "/" + this._url.path.join("/");
@@ -573,10 +573,6 @@ exports.implementation = class URLImpl {
   }
 
   set hash(v) {
-    if (this._url.scheme === "javascript") {
-      return;
-    }
-
     if (v === "") {
       this._url.fragment = null;
       return;
@@ -585,6 +581,10 @@ exports.implementation = class URLImpl {
     const input = v[0] === "#" ? v.substring(1) : v;
     this._url.fragment = "";
     usm.basicURLParse(input, { url: this._url, stateOverride: "fragment" });
+  }
+
+  toJSON() {
+    return this.href;
   }
 };
 
@@ -615,6 +615,17 @@ function URL(url) {
 
   module.exports.setup(this, args);
 }
+
+URL.prototype.toJSON = function toJSON() {
+  if (!this || !module.exports.is(this)) {
+    throw new TypeError("Illegal invocation");
+  }
+  const args = [];
+  for (let i = 0; i < arguments.length && i < 0; ++i) {
+    args[i] = arguments[i];
+  }
+  return this[impl].toJSON.apply(this[impl], args);
+};
 Object.defineProperty(URL.prototype, "href", {
   get() {
     return this[impl].href;
@@ -794,7 +805,7 @@ exports.parseURL = require("./url-state-machine").parseURL;
 const punycode = require("punycode");
 const tr46 = require("tr46");
 
-const specialSchemas = {
+const specialSchemes = {
   ftp: 21,
   file: null,
   gopher: 70,
@@ -840,6 +851,38 @@ function isDoubleDot(buffer) {
   return buffer === ".." || buffer === "%2e." || buffer === ".%2e" || buffer === "%2e%2e";
 }
 
+function isWindowsDriveLetterCodePoints(cp1, cp2) {
+  return isASCIIAlpha(cp1) && (cp2 === 58 || cp2 === 124);
+}
+
+function isWindowsDriveLetterString(string) {
+  return string.length === 2 && isASCIIAlpha(string.codePointAt(0)) && (string[1] === ":" || string[1] === "|");
+}
+
+function isNormalizedWindowsDriveLetterString(string) {
+  return string.length === 2 && isASCIIAlpha(string.codePointAt(0)) && string[1] === ":";
+}
+
+function containsForbiddenHostCodePoint(string) {
+  return string.search(/\u0000|\u0009|\u000A|\u000D|\u0020|#|%|\/|:|\?|@|\[|\\|\]/) !== -1;
+}
+
+function containsForbiddenHostCodePointExcludingPercent(string) {
+  return string.search(/\u0000|\u0009|\u000A|\u000D|\u0020|#|\/|:|\?|@|\[|\\|\]/) !== -1;
+}
+
+function isSpecialScheme(scheme) {
+  return specialSchemes[scheme] !== undefined;
+}
+
+function isSpecial(url) {
+  return isSpecialScheme(url.scheme);
+}
+
+function defaultPort(scheme) {
+  return specialSchemes[scheme];
+}
+
 function percentEncode(c) {
   let hex = c.toString(16).toUpperCase();
   if (hex.length === 1) {
@@ -849,12 +892,8 @@ function percentEncode(c) {
   return "%" + hex;
 }
 
-const invalidCodePoint = String.fromCodePoint(65533);
 function utf8PercentEncode(c) {
   const buf = new Buffer(c);
-  if (buf.toString() === invalidCodePoint) {
-    return "";
-  }
 
   let str = "";
 
@@ -881,24 +920,25 @@ function utf8PercentDecode(str) {
   return new Buffer(output).toString();
 }
 
-function isSimpleEncode(c) {
+function isC0ControlPercentEncode(c) {
   return c <= 0x1F || c > 0x7E;
 }
 
-const defaultEncodeSet = [32, 34, 35, 60, 62, 63, 96, 123, 125];
-function isDefaultEncode(c) {
-  return isSimpleEncode(c) || defaultEncodeSet.indexOf(c) !== -1;
+const extraPathPercentEncodeSet = new Set([32, 34, 35, 60, 62, 63, 96, 123, 125]);
+function isPathPercentEncode(c) {
+  return isC0ControlPercentEncode(c) || extraPathPercentEncodeSet.has(c);
 }
 
-const userInfoEncodeSet = [47, 58, 59, 61, 64, 91, 92, 93, 94, 124];
-function isUserInfoEncode(c) {
-  return isDefaultEncode(c) || userInfoEncodeSet.indexOf(c) !== -1;
+const extraUserinfoPercentEncodeSet =
+  new Set([47, 58, 59, 61, 64, 91, 92, 93, 94, 124]);
+function isUserinfoPercentEncode(c) {
+  return isPathPercentEncode(c) || extraUserinfoPercentEncodeSet.has(c);
 }
 
-function encodeChar(c, checkCb) {
+function percentEncodeChar(c, encodeSetPredicate) {
   const cStr = String.fromCodePoint(c);
 
-  if (checkCb(c)) {
+  if (encodeSetPredicate(c)) {
     return utf8PercentEncode(cStr);
   }
 
@@ -931,7 +971,9 @@ function parseIPv4Number(input) {
 function parseIPv4(input) {
   const parts = input.split(".");
   if (parts[parts.length - 1] === "") {
-    parts.pop();
+    if (parts.length > 1) {
+      parts.pop();
+    }
   }
 
   if (parts.length > 4) {
@@ -1054,10 +1096,19 @@ function parseIPv6(input) {
   if (ipv4 && piecePtr > 6) {
     return failure;
   } else if (input[pointer] !== undefined) {
-    let dotsSeen = 0;
+    let numbersSeen = 0;
 
     while (input[pointer] !== undefined) {
       let value = null;
+
+      if (numbersSeen > 0) {
+        if (input[pointer] === 46 && numbersSeen < 4) {
+          ++pointer;
+        } else {
+          return failure;
+        }
+      }
+
       if (!isASCIIDigit(input[pointer])) {
         return failure;
       }
@@ -1077,22 +1128,17 @@ function parseIPv6(input) {
         }
       }
 
-      if (dotsSeen < 3 && input[pointer] !== 46) {
-        return failure;
-      }
       ip[piecePtr] = ip[piecePtr] * 0x100 + value;
-      if (dotsSeen === 1 || dotsSeen === 3) {
+
+      ++numbersSeen;
+
+      if (numbersSeen === 2 || numbersSeen === 4) {
         ++piecePtr;
       }
 
-      if (input[pointer] !== undefined) {
-        ++pointer;
-      }
-
-      if (dotsSeen === 3 && input[pointer] !== undefined) {
+      if (input[pointer] === undefined && numbersSeen !== 4) {
         return failure;
       }
-      ++dotsSeen;
     }
   }
 
@@ -1139,7 +1185,7 @@ function serializeIPv6(address) {
   return output;
 }
 
-function parseHost(input, isUnicode) {
+function parseHost(input, isSpecialArg) {
   if (input[0] === "[") {
     if (input[input.length - 1] !== "]") {
       return failure;
@@ -1148,13 +1194,17 @@ function parseHost(input, isUnicode) {
     return parseIPv6(input.substring(1, input.length - 1));
   }
 
+  if (!isSpecialArg) {
+    return parseOpaqueHost(input);
+  }
+
   const domain = utf8PercentDecode(input);
-  const asciiDomain = tr46.toASCII(domain, false, tr46.PROCESSING_OPTIONS.TRANSITIONAL, false);
+  const asciiDomain = tr46.toASCII(domain, false, tr46.PROCESSING_OPTIONS.NONTRANSITIONAL, false);
   if (asciiDomain === null) {
     return failure;
   }
 
-  if (asciiDomain.search(/\u0000|\u0009|\u000A|\u000D|\u0020|#|%|\/|:|\?|@|\[|\\|\]/) !== -1) {
+  if (containsForbiddenHostCodePoint(asciiDomain)) {
     return failure;
   }
 
@@ -1163,7 +1213,20 @@ function parseHost(input, isUnicode) {
     return ipv4Host;
   }
 
-  return isUnicode ? tr46.toUnicode(asciiDomain, false).domain : asciiDomain;
+  return asciiDomain;
+}
+
+function parseOpaqueHost(input) {
+  if (containsForbiddenHostCodePointExcludingPercent(input)) {
+    return failure;
+  }
+
+  let output = "";
+  const decoded = punycode.ucs2.decode(input);
+  for (let i = 0; i < decoded.length; ++i) {
+    output += percentEncodeChar(decoded[i], isC0ControlPercentEncode);
+  }
+  return output;
 }
 
 function findLongestZeroSequence(arr) {
@@ -1187,6 +1250,12 @@ function findLongestZeroSequence(arr) {
       }
       ++currLen;
     }
+  }
+
+  // if trailing zeros
+  if (currLen > maxLen) {
+    maxIdx = currStart;
+    maxLen = currLen;
   }
 
   return {
@@ -1228,6 +1297,14 @@ function shortenPath(url) {
   path.pop();
 }
 
+function includesCredentials(url) {
+  return url.username !== "" || url.password !== "";
+}
+
+function cannotHaveAUsernamePasswordPort(url) {
+  return url.host === null || url.host === "" || url.cannotBeABaseURL || url.scheme === "file";
+}
+
 function isNormalizedWindowsDriveLetter(string) {
   return /^[A-Za-z]:$/.test(string);
 }
@@ -1246,7 +1323,7 @@ function URLStateMachine(input, base, encodingOverride, url, stateOverride) {
     this.url = {
       scheme: "",
       username: "",
-      password: null,
+      password: "",
       host: null,
       port: null,
       path: [],
@@ -1274,6 +1351,7 @@ function URLStateMachine(input, base, encodingOverride, url, stateOverride) {
   this.buffer = "";
   this.atFlag = false;
   this.arrFlag = false;
+  this.passwordTokenSeenFlag = false;
 
   this.input = punycode.ucs2.decode(this.input);
 
@@ -1301,7 +1379,7 @@ URLStateMachine.prototype["parse scheme start"] = function parseSchemeStart(c, c
     --this.pointer;
   } else {
     this.parseError = true;
-    return false;
+    return failure;
   }
 
   return true;
@@ -1312,11 +1390,11 @@ URLStateMachine.prototype["parse scheme"] = function parseScheme(c, cStr) {
     this.buffer += cStr.toLowerCase();
   } else if (c === 58) {
     if (this.stateOverride) {
-      if (specialSchemas[this.url.scheme] !== undefined && specialSchemas[this.buffer] === undefined) {
+      if (isSpecial(this.url) && !isSpecialScheme(this.buffer)) {
         return false;
       }
 
-      if (specialSchemas[this.url.scheme] === undefined && specialSchemas[this.buffer] !== undefined) {
+      if (!isSpecial(this.url) && isSpecialScheme(this.buffer)) {
         return false;
       }
     }
@@ -1330,10 +1408,9 @@ URLStateMachine.prototype["parse scheme"] = function parseScheme(c, cStr) {
         this.parseError = true;
       }
       this.state = "file";
-    } else if (specialSchemas[this.url.scheme] !== undefined && this.base !== null &&
-               this.base.scheme === this.url.scheme) {
+    } else if (isSpecial(this.url) && this.base !== null && this.base.scheme === this.url.scheme) {
       this.state = "special relative or authority";
-    } else if (specialSchemas[this.url.scheme] !== undefined) {
+    } else if (isSpecial(this.url)) {
       this.state = "special authority slashes";
     } else if (this.input[this.pointer + 1] === 47) {
       this.state = "path or authority";
@@ -1349,7 +1426,7 @@ URLStateMachine.prototype["parse scheme"] = function parseScheme(c, cStr) {
     this.pointer = -1;
   } else {
     this.parseError = true;
-    return false;
+    return failure;
   }
 
   return true;
@@ -1428,7 +1505,7 @@ URLStateMachine.prototype["parse relative"] = function parseRelative(c) {
     this.url.query = this.base.query;
     this.url.fragment = "";
     this.state = "fragment";
-  } else if (specialSchemas[this.url.scheme] !== undefined && c === 92) {
+  } else if (isSpecial(this.url) && c === 92) {
     this.parseError = true;
     this.state = "relative slash";
   } else {
@@ -1446,11 +1523,13 @@ URLStateMachine.prototype["parse relative"] = function parseRelative(c) {
 };
 
 URLStateMachine.prototype["parse relative slash"] = function parseRelativeSlash(c) {
-  if (c === 47 || (specialSchemas[this.url.scheme] !== undefined && c === 92)) {
+  if (isSpecial(this.url) && (c === 47 || c === 92)) {
     if (c === 92) {
       this.parseError = true;
     }
     this.state = "special authority ignore slashes";
+  } else if (c === 47) {
+    this.state = "authority";
   } else {
     this.url.username = this.base.username;
     this.url.password = this.base.password;
@@ -1500,12 +1579,12 @@ URLStateMachine.prototype["parse authority"] = function parseAuthority(c, cStr) 
     for (let pointer = 0; pointer < len; ++pointer) {
       const codePoint = this.buffer.codePointAt(pointer);
 
-      if (codePoint === 58 && this.url.password === null) {
-        this.url.password = "";
+      if (codePoint === 58 && !this.passwordTokenSeenFlag) {
+        this.passwordTokenSeenFlag = true;
         continue;
       }
-      const encodedCodePoints = encodeChar(codePoint, isUserInfoEncode);
-      if (this.url.password !== null) {
+      const encodedCodePoints = percentEncodeChar(codePoint, isUserinfoPercentEncode);
+      if (this.passwordTokenSeenFlag) {
         this.url.password += encodedCodePoints;
       } else {
         this.url.username += encodedCodePoints;
@@ -1513,7 +1592,11 @@ URLStateMachine.prototype["parse authority"] = function parseAuthority(c, cStr) 
     }
     this.buffer = "";
   } else if (isNaN(c) || c === 47 || c === 63 || c === 35 ||
-             (specialSchemas[this.url.scheme] !== undefined && c === 92)) {
+             (isSpecial(this.url) && c === 92)) {
+    if (this.atFlag && this.buffer === "") {
+      this.parseError = true;
+      return failure;
+    }
     this.pointer -= countSymbols(this.buffer) + 1;
     this.buffer = "";
     this.state = "host";
@@ -1526,12 +1609,16 @@ URLStateMachine.prototype["parse authority"] = function parseAuthority(c, cStr) 
 
 URLStateMachine.prototype["parse hostname"] =
 URLStateMachine.prototype["parse host"] = function parseHostName(c, cStr) {
-  if (c === 58 && !this.arrFlag) {
-    if (specialSchemas[this.url.scheme] !== undefined && this.buffer === "") {
+  if (this.stateOverride && this.url.scheme === "file") {
+    --this.pointer;
+    this.state = "file host";
+  } else if (c === 58 && !this.arrFlag) {
+    if (this.buffer === "") {
+      this.parseError = true;
       return failure;
     }
 
-    const host = parseHost(this.buffer);
+    const host = parseHost(this.buffer, isSpecial(this.url));
     if (host === failure) {
       return failure;
     }
@@ -1543,13 +1630,18 @@ URLStateMachine.prototype["parse host"] = function parseHostName(c, cStr) {
       return false;
     }
   } else if (isNaN(c) || c === 47 || c === 63 || c === 35 ||
-             (specialSchemas[this.url.scheme] !== undefined && c === 92)) {
+             (isSpecial(this.url) && c === 92)) {
     --this.pointer;
-    if (specialSchemas[this.url.scheme] !== undefined && this.buffer === "") {
+    if (isSpecial(this.url) && this.buffer === "") {
+      this.parseError = true;
       return failure;
+    } else if (this.stateOverride && this.buffer === "" &&
+               (includesCredentials(this.url) || this.url.port !== null)) {
+      this.parseError = true;
+      return false;
     }
 
-    const host = parseHost(this.buffer);
+    const host = parseHost(this.buffer, isSpecial(this.url));
     if (host === failure) {
       return failure;
     }
@@ -1576,7 +1668,7 @@ URLStateMachine.prototype["parse port"] = function parsePort(c, cStr) {
   if (isASCIIDigit(c)) {
     this.buffer += cStr;
   } else if (isNaN(c) || c === 47 || c === 63 || c === 35 ||
-             (specialSchemas[this.url.scheme] !== undefined && c === 92) ||
+             (isSpecial(this.url) && c === 92) ||
              this.stateOverride) {
     if (this.buffer !== "") {
       const port = parseInt(this.buffer);
@@ -1584,7 +1676,7 @@ URLStateMachine.prototype["parse port"] = function parsePort(c, cStr) {
         this.parseError = true;
         return failure;
       }
-      this.url.port = port === specialSchemas[this.url.scheme] ? null : port;
+      this.url.port = port === defaultPort(this.url.scheme) ? null : port;
       this.buffer = "";
     }
     if (this.stateOverride) {
@@ -1600,47 +1692,47 @@ URLStateMachine.prototype["parse port"] = function parsePort(c, cStr) {
   return true;
 };
 
+const fileOtherwiseCodePoints = new Set([47, 92, 63, 35]);
+
 URLStateMachine.prototype["parse file"] = function parseFile(c) {
   this.url.scheme = "file";
-  if (isNaN(c)) {
-    if (this.base !== null && this.base.scheme === "file") {
-      this.url.host = this.base.host;
-      this.url.path = this.base.path.slice();
-      this.url.query = this.base.query;
-    }
-  } else if (c === 47 || c === 92) {
+
+  if (c === 47 || c === 92) {
     if (c === 92) {
       this.parseError = true;
     }
     this.state = "file slash";
-  } else if (c === 63) {
-    if (this.base !== null && this.base.scheme === "file") {
+  } else if (this.base !== null && this.base.scheme === "file") {
+    if (isNaN(c)) {
+      this.url.host = this.base.host;
+      this.url.path = this.base.path.slice();
+      this.url.query = this.base.query;
+    } else if (c === 63) {
       this.url.host = this.base.host;
       this.url.path = this.base.path.slice();
       this.url.query = "";
-    }
-    this.state = "query";
-  } else if (c === 35) {
-    if (this.base !== null && this.base.scheme === "file") {
+      this.state = "query";
+    } else if (c === 35) {
       this.url.host = this.base.host;
       this.url.path = this.base.path.slice();
       this.url.query = this.base.query;
       this.url.fragment = "";
-    }
-    this.state = "fragment";
-  } else {
-    if (this.base !== null && this.base.scheme === "file") {
-      if ((!isASCIIAlpha(c) || // windows drive letter
-           (this.input[this.pointer + 1] !== 58 && this.input[this.pointer + 1] !== 124)) ||
+      this.state = "fragment";
+    } else {
+      if (!isWindowsDriveLetterCodePoints(c, this.input[this.pointer + 1]) ||
           this.input.length - this.pointer - 1 === 1 || // remaining consists of 1 code point
-          [47, 92, 63, 35].indexOf(this.input[this.pointer + 2]) === -1) {
+          !fileOtherwiseCodePoints.has(this.input[this.pointer + 2])) {
         this.url.host = this.base.host;
         this.url.path = this.base.path.slice();
         shortenPath(this.url);
       } else {
         this.parseError = true;
       }
+
+      this.state = "path";
+      --this.pointer;
     }
+  } else {
     this.state = "path";
     --this.pointer;
   }
@@ -1656,7 +1748,7 @@ URLStateMachine.prototype["parse file slash"] = function parseFileSlash(c) {
     this.state = "file host";
   } else {
     if (this.base !== null && this.base.scheme === "file") {
-      if (this.base.path.length && isASCIIAlpha(this.base.path[0][0].charCodeAt(0)) && this.base.path[0][1] === ":") {
+      if (this.base.path.length > 0 && isNormalizedWindowsDriveLetterString(this.base.path[0])) {
         this.url.path.push(this.base.path[0]);
       }
     }
@@ -1670,19 +1762,27 @@ URLStateMachine.prototype["parse file slash"] = function parseFileSlash(c) {
 URLStateMachine.prototype["parse file host"] = function parseFileHost(c, cStr) {
   if (isNaN(c) || c === 47 || c === 92 || c === 63 || c === 35) {
     --this.pointer;
-    // don't need to count symbols here since we check ASCII values
-    if (this.buffer.length === 2 &&
-      isASCIIAlpha(this.buffer.codePointAt(0)) && (this.buffer[1] === ":" || this.buffer[1] === "|")) {
+    if (!this.stateOverride && isWindowsDriveLetterString(this.buffer)) {
+      this.parseError = true;
       this.state = "path";
     } else if (this.buffer === "") {
+      this.url.host = "";
+      if (this.stateOverride) {
+        return false;
+      }
       this.state = "path start";
     } else {
-      const host = parseHost(this.buffer);
+      let host = parseHost(this.buffer, isSpecial(this.url));
       if (host === failure) {
         return failure;
       }
-      if (host !== "localhost") {
-        this.url.host = host;
+      if (host === "localhost") {
+        host = "";
+      }
+      this.url.host = host;
+
+      if (this.stateOverride) {
+        return false;
       }
 
       this.buffer = "";
@@ -1696,36 +1796,48 @@ URLStateMachine.prototype["parse file host"] = function parseFileHost(c, cStr) {
 };
 
 URLStateMachine.prototype["parse path start"] = function parsePathStart(c) {
-  if (specialSchemas[this.url.scheme] !== undefined && c === 92) {
-    this.parseError = true;
-  }
-  this.state = "path";
-  if (c !== 47 && !(specialSchemas[this.url.scheme] !== undefined && c === 92)) {
-    --this.pointer;
+  if (isSpecial(this.url)) {
+    if (c === 92) {
+      this.parseError = true;
+    }
+    this.state = "path";
+
+    if (c !== 47 && c !== 92) {
+      --this.pointer;
+    }
+  } else if (!this.stateOverride && c === 63) {
+    this.url.query = "";
+    this.state = "query";
+  } else if (!this.stateOverride && c === 35) {
+    this.url.fragment = "";
+    this.state = "fragment";
+  } else if (c !== undefined) {
+    this.state = "path";
+    if (c !== 47) {
+      --this.pointer;
+    }
   }
 
   return true;
 };
 
 URLStateMachine.prototype["parse path"] = function parsePath(c) {
-  if (isNaN(c) || c === 47 || (specialSchemas[this.url.scheme] !== undefined && c === 92) ||
+  if (isNaN(c) || c === 47 || (isSpecial(this.url) && c === 92) ||
       (!this.stateOverride && (c === 63 || c === 35))) {
-    if (specialSchemas[this.url.scheme] !== undefined && c === 92) {
+    if (isSpecial(this.url) && c === 92) {
       this.parseError = true;
     }
 
     if (isDoubleDot(this.buffer)) {
       shortenPath(this.url);
-      if (c !== 47 && !(specialSchemas[this.url.scheme] !== undefined && c === 92)) {
+      if (c !== 47 && !(isSpecial(this.url) && c === 92)) {
         this.url.path.push("");
       }
     } else if (isSingleDot(this.buffer) && c !== 47 &&
-               !(specialSchemas[this.url.scheme] !== undefined && c === 92)) {
+               !(isSpecial(this.url) && c === 92)) {
       this.url.path.push("");
     } else if (!isSingleDot(this.buffer)) {
-      if (this.url.scheme === "file" && this.url.path.length === 0 &&
-        this.buffer.length === 2 && isASCIIAlpha(this.buffer.codePointAt(0)) &&
-        (this.buffer[1] === "|" || this.buffer[1] === ":")) {
+      if (this.url.scheme === "file" && this.url.path.length === 0 && isWindowsDriveLetterString(this.buffer)) {
         if (this.url.host !== null) {
           this.parseError = true;
         }
@@ -1752,14 +1864,7 @@ URLStateMachine.prototype["parse path"] = function parsePath(c) {
       this.parseError = true;
     }
 
-    if (c === 37 &&
-        this.input[this.pointer + 1] === 50 &&
-        (this.input[this.pointer + 2] === 101 || this.input[this.pointer + 2] === 69)) {
-      this.buffer += ".";
-      this.pointer += 2;
-    } else {
-      this.buffer += encodeChar(c, isDefaultEncode);
-    }
+    this.buffer += percentEncodeChar(c, isPathPercentEncode);
   }
 
   return true;
@@ -1785,7 +1890,7 @@ URLStateMachine.prototype["parse cannot-be-a-base-URL path"] = function parseCan
     }
 
     if (!isNaN(c)) {
-      this.url.path[0] = this.url.path[0] + encodeChar(c, isSimpleEncode);
+      this.url.path[0] = this.url.path[0] + percentEncodeChar(c, isC0ControlPercentEncode);
     }
   }
 
@@ -1794,7 +1899,7 @@ URLStateMachine.prototype["parse cannot-be-a-base-URL path"] = function parseCan
 
 URLStateMachine.prototype["parse query"] = function parseQuery(c, cStr) {
   if (isNaN(c) || (!this.stateOverride && c === 35)) {
-    if (specialSchemas[this.url.scheme] === undefined || this.url.scheme === "ws" || this.url.scheme === "wss") {
+    if (!isSpecial(this.url) || this.url.scheme === "ws" || this.url.scheme === "wss") {
       this.encodingOverride = "utf-8";
     }
 
@@ -1839,7 +1944,7 @@ URLStateMachine.prototype["parse fragment"] = function parseFragment(c) {
       this.parseError = true;
     }
 
-    this.url.fragment += encodeChar(c, isSimpleEncode);
+    this.url.fragment += percentEncodeChar(c, isC0ControlPercentEncode);
   }
 
   return true;
@@ -1848,14 +1953,18 @@ URLStateMachine.prototype["parse fragment"] = function parseFragment(c) {
 function serializeURL(url, excludeFragment) {
   let output = url.scheme + ":";
   if (url.host !== null) {
-    output += "//" + url.username;
-    if (url.password !== null) {
-      output += ":" + url.password;
-    }
-    if (url.username !== "" || url.password !== null) {
+    output += "//";
+
+    if (url.username !== "" || url.password !== "") {
+      output += url.username;
+      if (url.password !== "") {
+        output += ":" + url.password;
+      }
       output += "@";
     }
+
     output += serializeHost(url.host);
+
     if (url.port !== null) {
       output += ":" + url.port;
     }
@@ -1866,7 +1975,9 @@ function serializeURL(url, excludeFragment) {
   if (url.cannotBeABaseURL) {
     output += url.path[0];
   } else {
-    output += "/" + url.path.join("/");
+    for (const string of url.path) {
+      output += "/" + string;
+    }
   }
 
   if (url.query !== null) {
@@ -1943,23 +2054,21 @@ module.exports.setTheUsername = function (url, username) {
   url.username = "";
   const decoded = punycode.ucs2.decode(username);
   for (let i = 0; i < decoded.length; ++i) {
-    url.username += encodeChar(decoded[i], isUserInfoEncode);
+    url.username += percentEncodeChar(decoded[i], isUserinfoPercentEncode);
   }
 };
 
 module.exports.setThePassword = function (url, password) {
-  if (password === "") {
-    url.password = null;
-  } else {
-    url.password = "";
-    const decoded = punycode.ucs2.decode(password);
-    for (let i = 0; i < decoded.length; ++i) {
-      url.password += encodeChar(decoded[i], isUserInfoEncode);
-    }
+  url.password = "";
+  const decoded = punycode.ucs2.decode(password);
+  for (let i = 0; i < decoded.length; ++i) {
+    url.password += percentEncodeChar(decoded[i], isUserinfoPercentEncode);
   }
 };
 
 module.exports.serializeHost = serializeHost;
+
+module.exports.cannotHaveAUsernamePasswordPort = cannotHaveAUsernamePasswordPort;
 
 module.exports.serializeInteger = function (integer) {
   return String(integer);
